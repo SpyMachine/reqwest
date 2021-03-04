@@ -5,8 +5,6 @@ mod support;
 use futures_util::stream::StreamExt;
 use support::*;
 
-use cookie_store::CookieStoreMutex as CookieStore;
-
 #[tokio::test]
 async fn test_redirect_301_and_302_and_303_changes_post_to_get() {
     let client = reqwest::Client::new();
@@ -312,7 +310,7 @@ async fn test_redirect_302_with_set_cookies() {
     let dst = format!("http://{}/{}", server.addr(), "dst");
 
     let client = reqwest::ClientBuilder::new()
-        .cookie_store(Some(Arc::new(CookieStore::default())))
+        .cookie_store(true)
         .build()
         .unwrap();
     let res = client.get(&url).send().await.unwrap();

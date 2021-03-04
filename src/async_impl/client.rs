@@ -449,10 +449,10 @@ impl ClientBuilder {
         self
     }
 
-    /// Set the persistent cookie store for the client.
+    /// Enable a persistent cookie store for the client.
     ///
-    /// Cookies received in responses will be passed to this store, and
-    /// additional requests will query this store for cookies.
+    /// Cookies received in responses will be preserved and included in
+    /// additional requests.
     ///
     /// By default, no cookie store is used.
     ///
@@ -462,12 +462,12 @@ impl ClientBuilder {
     #[cfg(feature = "cookies")]
     #[cfg_attr(docsrs, doc(cfg(feature = "cookies")))]
     pub fn cookie_store(mut self, enable: bool) -> ClientBuilder {
-        self.config.cookie_store = if enable {
-            Some(cookie::CookieStore::default())
+        if enable {
+            self.cookie_provider(Arc::new(cookie::Jar::default()))
         } else {
-            None
-        };
-        self
+            self.config.cookie_store = None;
+            self
+        }
     }
 
     /// Set the persistent cookie store for the client.
@@ -484,9 +484,9 @@ impl ClientBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "cookies")))]
     pub fn cookie_provider<C: cookie::CookieStore + 'static>(
         mut self,
-        cookie_store: Option<Arc<C>>,
+        cookie_store: Arc<C>,
     ) -> ClientBuilder {
-        self.config.cookie_store = cookie_store.map(|a| a as _);
+        self.config.cookie_store = Some(cookie_store as _);
         self
     }
 
@@ -1452,8 +1452,7 @@ impl Future for PendingRequest {
                     let mut cookies =
                         cookie::extract_response_cookie_headers(&res.headers()).peekable();
                     if cookies.peek().is_some() {
-                        let cookies = cookies.collect();
-                        cookie_store.set_cookies(cookies, &self.url);
+                        cookie_store.set_cookies(&mut cookies, &self.url);
                     }
                 }
             }
@@ -1605,12 +1604,8 @@ fn make_referer(next: &Url, previous: &Url) -> Option<HeaderValue> {
 
 #[cfg(feature = "cookies")]
 fn add_cookie_header(headers: &mut HeaderMap, cookie_store: &dyn cookie::CookieStore, url: &Url) {
-    let header = cookie_store.cookies(url).join("; ");
-    if !header.is_empty() {
-        headers.insert(
-            crate::header::COOKIE,
-            HeaderValue::from_bytes(header.as_bytes()).unwrap(),
-        );
+    if let Some(header) = cookie_store.cookies(url) {
+        headers.insert(crate::header::COOKIE, header);
     }
 }
 
